@@ -3,6 +3,8 @@
 #include "../common.h"
 #include "genetic_algorithm.h"
 
+#include <execution>
+
 template <typename T>
 class Population
 {
@@ -17,6 +19,11 @@ public:
         }
     }
 
+    ~Population()
+    {
+        KillPopulation();
+    }
+
     void KillPopulation()
     {
         for (auto& genome : genomes)
@@ -27,16 +34,27 @@ public:
         genomes.clear();
     }
 
-    ~Population()
-    {
-        KillPopulation();
-    }
-
     void Evolution(float selection = 8.0f)
-    {
-        std::vector<T*> fittest = Population<T>::Selection(genomes, selection);
+    {        
+        std::vector<T*> fittest = Population<T>::Selection(genomes, selection);        
         std::vector<int> roulette = Population<T>::CreateRoulette(fittest);
-        std::vector<T*> offspring = Population<T>::Crossover(fittest, static_cast<int>(genomes.size()), roulette);
+        std::vector<T*> offspring(genomes.size());
+
+        std::for_each(
+            std::execution::par_unseq,
+            offspring.begin(),
+            offspring.end(),
+            [&](auto&& child)
+            {
+                child = new T();
+
+                T* parent0 = SelectParent(fittest, roulette);
+                T* parent1 = SelectParent(fittest, roulette, parent0);
+
+                const NeuralNetwork newNeuralNetwork0 = GA::Crossover(parent0->GetNeuralNetwork(), parent1->GetNeuralNetwork());
+                child->SetNeuralNetwork(newNeuralNetwork0);
+            }
+        );
 
         KillPopulation();
 
@@ -91,25 +109,6 @@ public:
         }
 
         return parent;
-    }
-
-    static std::vector<T*> Crossover(const std::vector<T*>& fittest, int sizeOfNewPopulation, const std::vector<int>& roulette)
-    {
-        std::vector<T*> offspring;
-
-        for (int i = 0; i < sizeOfNewPopulation; i++)
-        {
-            T* newGenome = new T();
-
-            T* parent0 = SelectParent(fittest, roulette);
-            T* parent1 = SelectParent(fittest, roulette, parent0);
-
-            const NeuralNetwork newNeuralNetwork0 = GA::Crossover(parent0->GetNeuralNetwork(), parent1->GetNeuralNetwork());
-            newGenome->SetNeuralNetwork(newNeuralNetwork0);
-            offspring.emplace_back(newGenome);
-        }
-
-        return offspring;
     }
 
     void Restart()
